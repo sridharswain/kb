@@ -1,0 +1,143 @@
+#!/bin/bash
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+ORANGE='\033[0;33m'
+NC='\033[0m' # No Color
+
+if [ "$1" == "" ]; then
+    printf "\n${RED} ---------------- USAGE ---------------- ${NC}\n"
+    printf "${ORANGE}pods <query string>${NC} - will display the pods\n"
+    printf "${ORANGE}tail <pod name>${NC} - will tail the required logs\n"
+    printf "${ORANGE}vi <pod name>${NC} - will vi the required logs\n"
+    printf "${ORANGE}less <pod name>${NC} - will less the required logs\n"
+    printf "${ORANGE}bash <pod name>${NC} - will bash into the pod"
+    printf "\n${RED} --------------------------------------- ${NC}\n"
+
+    printf "\n"
+    printf "${GREEN}Talk to the DevOps team for any help${NC}\n\n"
+    exit;
+fi
+
+command=$1
+# Gets any resources that matches the criteria
+resource() {
+    if [ "$2" == "" ]; then
+        kubectl get $1 --all-namespaces
+    else
+        kubectl get $1 --all-namespaces | grep $2
+    fi
+}
+# bash into a particular pod if 
+# multiple matches found then it will choose the first one
+execute_bash() {
+    pod_result=$(resource pods $1)
+    if [ "$pod_result" == "" ]; then
+        echo "${RED}No Such Pod Found${NC}"
+    else
+        read namespace pod  <<< $(echo $pod_result | awk '{print $1 " " $2}')
+        kubectl exec -it $pod -n $namespace -- bash
+    fi
+}
+# Gets the logs of the given pods default container
+logs() {
+    pod_result=$(resource pods $1)
+    if [ "$pod_result" == "" ]; then
+        echo "${RED}No Such Pod Found${NC}"
+    else
+        read namespace pod  <<< $(echo $pod_result | awk '{print $1 " " $2}')
+        container=$(echo $pod | awk -F'-' '{print $1}')
+        kubectl logs -f $pod $container -n $namespace
+    fi
+}
+#Tail the log files
+tail() {
+    printf "${GREEN}TAIL your Logs...${NC}\n"
+    pod_result=$(resource pods $1)
+    if [ "$pod_result" == "" ]; then
+        printf "${RED}No Such Pod Found${NC}"
+    else
+        read namespace pod  <<< $(echo $pod_result | awk '{print $1 " " $2}')
+        logFiles=($(kubectl exec $pod -n $namespace -- sh -c "ls /opt/akoshalogs/*/*.log"))
+        printf "\n${GREEN}A Total of ${RED}${#logFiles[@]} ${GREEN}log files found...${NC}\n"
+        index=0
+        for i in "${logFiles[@]}"
+            do
+               printf "${RED}$index${NC} - $i\n"
+               index=`expr $index + 1`
+            done
+                printf "${RED}BLANK${NC} - All Files\n"
+
+        echo ""
+        read -p "Select a file to TAIL: " mainmenuinput
+        
+        if [[ -z $mainmenuinput ]]; then
+            printf "${RED}Please Select a file to TAIL${NC}\n"
+            kubectl exec $pod -n $namespace -- sh -c "tail -f /opt/akoshalogs/*/*.log"
+        else
+            printf "${ORANGE}TAIL file: ${logFiles[$mainmenuinput]}${NC}\n"
+            kubectl exec -it $pod -n $namespace -- sh -c "tail -f '${logFiles[$mainmenuinput]}'"
+        fi       
+    fi
+}
+vi() {
+    printf "${GREEN}VI your Logs...${NC}\n"
+    pod_result=$(resource pods $1)
+    if [ "$pod_result" == "" ]; then
+        printf "${RED}No Such Pod Found${NC}"
+    else
+        read namespace pod  <<< $(echo $pod_result | awk '{print $1 " " $2}')
+        logFiles=($(kubectl exec $pod -n $namespace -- sh -c "ls /opt/akoshalogs/*/*.log"))
+        printf "\n${GREEN}A Total of ${RED}${#logFiles[@]} ${GREEN}log files found...${NC}\n"
+        index=0
+        for i in "${logFiles[@]}"
+            do
+               printf "${RED}$index${NC} - $i\n"
+               index=`expr $index + 1`
+            done
+
+        echo ""
+        read -p "Select a file to Tail: " mainmenuinput
+        
+        if [[ -z $mainmenuinput ]]; then
+            printf "${RED}ERROR: Please Select a file to vi${NC}\n"
+        else
+            printf "${ORANGE}vi file: ${logFiles[$mainmenuinput]}${NC}\n"
+            kubectl exec -it $pod -n $namespace -- sh -c "vi '${logFiles[$mainmenuinput]}'"
+        fi       
+    fi
+}
+less() {
+    printf "${GREEN}LESS your Logs...${NC}\n"
+    pod_result=$(resource pods $1)
+    if [ "$pod_result" == "" ]; then
+        printf "${RED}No Such Pod Found${NC}"
+    else
+        read namespace pod  <<< $(echo $pod_result | awk '{print $1 " " $2}')
+        logFiles=($(kubectl exec $pod -n $namespace -- sh -c "ls /opt/akoshalogs/*/*.log"))
+        printf "\n${GREEN}A Total of ${RED}${#logFiles[@]} ${GREEN}log files found...${NC}\n"
+        index=0
+        for i in "${logFiles[@]}"
+            do
+               printf "${RED}$index${NC} - $i\n"
+               index=`expr $index + 1`
+            done
+
+        echo ""
+        read -p "Select a file to LESS: " mainmenuinput
+        
+        if [[ -z $mainmenuinput ]]; then
+            printf "${RED}ERROR: Please Select a file to LESS${NC}\n"
+        else
+            printf "${ORANGE}LESS file: ${logFiles[$mainmenuinput]}${NC}\n"
+            kubectl exec -it $pod -n $namespace -- sh -c "less '${logFiles[$mainmenuinput]}'"
+        fi       
+    fi
+}
+case "$command" in
+    "bash") execute_bash $2 ;;
+    "logs") logs $2 ;;
+    "tail") tail $2 ;;
+    "vi") vi $2 ;;
+    "less") less $2 ;;
+    *) resource $command $2 ;;
+esac
