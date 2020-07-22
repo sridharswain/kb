@@ -1,0 +1,30 @@
+#!/bin/bash
+
+command=$1
+
+list() {
+    if [ "$1" == "" ]; then
+        gcloud compute instances list
+    else
+        gcloud compute instances list | grep $1
+    fi
+}
+
+exec_ssh() {
+    if [ "$1" == "" ]; then
+        echo "gx ssh <instance's names>"
+    else
+        machine=$(list $1)
+        if [ "$machine" == "" ]; then 
+            echo "No such machine found"
+        else
+            read ip <<< $(echo $machine | awk '{print $4}')
+            ssh sridharswain25@$ip
+        fi
+    fi
+}
+
+case "$command" in 
+    "ls") list $2;;
+    "ssh") exec_ssh $2;;
+esac
